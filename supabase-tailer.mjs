@@ -6,7 +6,6 @@ import { createServerClient } from "@supabase/ssr"
 import jwt from "@tsndr/cloudflare-worker-jwt";
 ;
 import dotenv from 'dotenv';
-// import { cookies } from "next/headers";
 
 const logsTableName = 'eliza_logs';
 
@@ -169,10 +168,13 @@ const main = async () => {
           agent_id: agentId,
           content: line,
         };
-        console.log('inserting log line', o);
+        // console.log('inserting log line', o);
         const result = await supabase.from(logsTableName)
           .insert(o);
-        console.log('result', result);
+        const { data, error } = result;
+        if (error) {
+          console.warn('log insert error', error);
+        }
       })();
     });
 };
