@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { program } from "commander";
 import { PassThrough } from "stream";
 import { createReadStream } from "tail-file-stream";
