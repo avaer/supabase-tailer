@@ -17,7 +17,6 @@ const getCredentialsFromToken = (token) => {
   }
 
   const out = jwt.decode(token);
-  console.log('out', out);
   const userId = out?.payload?.userId ?? out?.payload?.sub ?? null;
   const agentId = out?.payload?.agentId ?? null;
 
@@ -77,7 +76,6 @@ export const createClient = async ({
 
   // Parse the credentials from the JWT token
   const { userId, agentId } = getCredentialsFromToken(jwt);
-  console.log('Creating client with credentials:', { userId, agentId });
 
   return createServerClient(
     process.env.SUPABASE_URL || '',
@@ -127,7 +125,6 @@ const main = async () => {
     throw new Error("Error: No JWT token specified");
   }
   const { userId, agentId } = getCredentialsFromToken(jwt);
-  console.warn('parsed jwt', { userId, agentId });
 
   // Create a unified stream
   const unifiedStream = new PassThrough();
