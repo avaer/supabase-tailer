@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
-import { program } from "commander";
-import { PassThrough } from "stream";
-import { createReadStream } from "tail-file-stream";
-import split2 from 'split2';
-import { createServerClient } from "@supabase/ssr"
-import jwt from "@tsndr/cloudflare-worker-jwt";
-;
+import fs from 'fs';
 import dotenv from 'dotenv';
+import { program } from 'commander';
+import { PassThrough } from 'stream';
+import { createReadStream } from 'tail-file-stream';
+import split2 from 'split2';
+import { createServerClient } from '@supabase/ssr'
+import jwt from '@tsndr/cloudflare-worker-jwt';
 
 const logsTableName = 'eliza_logs';
 
@@ -74,9 +74,6 @@ export const createClient = async ({
 
   const cookieStore = new LocalCookieStore();
 
-  // Parse the credentials from the JWT token
-  const { userId, agentId } = getCredentialsFromToken(jwt);
-
   return createServerClient(
     process.env.SUPABASE_URL || '',
     process.env.SUPABASE_ANON_KEY || '',
@@ -132,7 +129,18 @@ const main = async () => {
   // Set up each file for tailing
   for (const file of files) {
     try {
-      const tailStream = file === '-' ? process.stdin : createReadStream(file);
+      let tailStream;
+      if (file === '-') {
+        tailStream = process.stdin;
+      } else {
+        // ensure the file exists, touch it if it doesn't
+        try {
+          await fs.promises.exists(file);
+        } catch (err) {
+          await fs.promises.writeFile(file, '');
+        }
+        tailStream = createReadStream(file);
+      }
       
       tailStream.pipe(unifiedStream, {
         end: false,
