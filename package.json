@@ -1,7 +1,7 @@
 {
   "name": "supabase-tailer",
   "version": "0.0.1",
-  "main": "index.js",
+  "main": "supabase-tailer.mjs",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
