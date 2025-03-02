@@ -2,8 +2,8 @@
   "name": "supabase-tailer",
   "version": "0.0.1",
   "main": "supabase-tailer.mjs",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "bin": {
+    "supabase-tailer": "./supabase-tailer.mjs"
   },
   "repository": {
     "type": "git",
