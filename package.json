@@ -1,6 +1,6 @@
 {
   "name": "supabase-tailer",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "main": "supabase-tailer.mjs",
   "bin": {
     "supabase-tailer": "supabase-tailer.mjs"
