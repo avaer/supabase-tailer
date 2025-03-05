@@ -228,7 +228,6 @@ const main = async () => {
           const tailStreamPromise = tailStreamManager.addTailStream(p, {
             parser,
           });
-          pathPromises.push(tailStreamPromise);
 
           const tailStream = await tailStreamPromise;
           console.log('tailing file', p);
