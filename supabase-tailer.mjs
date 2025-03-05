@@ -287,8 +287,8 @@ const main = async () => {
           .insert(o);
         const { data, error } = result;
         if (error) {
-            console.warn(`${logPrefix}log insert error`, error);
-          }
+          console.warn(`${logPrefix}log insert error`, error);
+        }
         })();
       }
     });
