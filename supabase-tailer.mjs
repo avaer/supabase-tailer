@@ -8,6 +8,7 @@ import { createReadStream } from 'tail-file-stream';
 import split2 from 'split2';
 import { createServerClient } from '@supabase/ssr'
 import jwt from '@tsndr/cloudflare-worker-jwt';
+import chokidar from 'chokidar';
 
 const logsTableName = 'eliza_logs';
 
@@ -98,22 +99,85 @@ export const createClient = async ({
   );
 };
 
-program
-  .name("supabase-tailer")
-  .description("Tail multiple files and stream their contents to Supabase")
-  .option("--jwt <token>", "JWT token for authentication")
-  .argument("[files...]", "Files to tail")
-  .parse(process.argv);
+class TailStreamManager {
+  constructor() {
+    this.tailStreams = new Map();
+  }
 
-// const options = program.opts();
-const files = program.args;
+  async addTailStream(p) {
+    // ensure the file exists, touch it if it doesn't
+    try {
+      await fs.promises.lstat(p);
+    } catch (err) {
+      await fs.promises.writeFile(p, '');
+    }
+    
+    // create the read stream
+    const tailStream = createReadStream(p);
+
+    // latch the tail stream
+    this.tailStreams.set(p, tailStream);
+
+    // wait for initial eof
+    await new Promise((resolve, reject) => {
+      const oneof = () => {
+        resolve(null);
+        cleanup();
+      };
+      tailStream.on('eof', oneof);
+      const onerror = (err) => {
+        reject(err);
+        cleanup();
+      };
+      tailStream.on('error', onerror);
+
+      const cleanup = () => {
+        tailStream.off('eof', oneof);
+        tailStream.off('error', onerror);
+      };
+
+      tailStream.resume();
+    });
+
+    return tailStream;
+  }
+
+  async removeTailStream(p) {
+    const tailStream = this.tailStreams.get(p);
+    if (tailStream) {
+      this.tailStreams.delete(p);
+
+      await new Promise((resolve) => {
+        const onclose = () => {
+          resolve(null);
+          cleanup();
+        };
+        tailStream.on('close', onclose);
+        const cleanup = () => {
+          tailStream.removeListener('close', onclose);
+        };
+      });
+    } else {
+      console.warn('tail stream not found', p);
+    }
+  }
+}
 
 const main = async () => {
   // Load environment variables from .env file
   dotenv.config();
 
-  if (files.length === 0) {
-    console.error("Error: No files specified");
+  // initialize the program
+  program
+    .name("supabase-tailer")
+    .description("Tail multiple files and stream their contents to Supabase")
+    .option("--jwt <token>", "JWT token for authentication")
+    .argument("[paths...]", "Paths to tail")
+    .parse(process.argv);
+
+  const paths = program.args;
+  if (paths.length === 0) {
+    console.error("Error: No paths specified");
     process.exit(1);
   }
 
@@ -127,51 +191,55 @@ const main = async () => {
   const unifiedStream = new PassThrough();
   
   // Set up each file for tailing
-  const filePromises = files.map(async (file) => {
+  const tailStreamManager = new TailStreamManager();
+  const pathPromises = [];
+  for (const p of paths) {
     let tailStream;
-    if (file === '-') {
+    if (p === '-') {
       tailStream = process.stdin;
     } else {
-      const match = file.match(/^(?:([^:]+):)?([\s\S]*)$/);
+      const match = p.match(/^(?:([^:]+):)?([\s\S]*)$/);
       const format = match[1] || null;
       const path = match[2];
 
-      // ensure the file exists, touch it if it doesn't
-      try {
-        await fs.promises.lstat(path);
-      } catch (err) {
-        await fs.promises.writeFile(path, '');
-      }
-      // create the read stream
-      tailStream = createReadStream(path);
-      // wait for initial eof
-      await new Promise((resolve) => {
-        const oneof = () => {
-          resolve(null);
+      // use chokidar to watch teh glob
+      const watcher = chokidar.watch(path, {
+        persistent: true,
+        followSymlinks: true,
+        awaitWriteFinish: true,
+      });
+      watcher.on('add', () => {
+        (async () => {
+          const tailStreamPromise = tailStreamManager.addTailStream(path);
+          pathPromises.push(tailStreamPromise);
+
+          const tailStream = await tailStreamPromise;
+          tailStream.pipe(unifiedStream, {
+            end: false,
+          });
+        })();
+      });
+      watcher.on('unlink', () => {
+        (async () => {
+          await tailStreamManager.removeTailStream(path);
+        })();
+      });
+      const watcherPromise = new Promise((resolve) => {
+        const onready = () => {
+          resolve();
           cleanup();
         };
-        tailStream.on('eof', oneof);
-        const onerror = (err) => {
-          reject(err);
-          cleanup();
-        };
-        tailStream.on('error', onerror);
+        watcher.on('ready', onready);
 
         const cleanup = () => {
-          tailStream.off('eof', oneof);
-          tailStream.off('error', onerror);
+          watcher.removeListener('ready', onready);
         };
-
-        tailStream.resume();
       });
+      pathPromises.push(watcherPromise);
     }
-    
-    tailStream.pipe(unifiedStream, {
-      end: false,
-    });
-  });
+  }
   try {
-    await Promise.all(filePromises);
+    await Promise.all(pathPromises);
   } catch (error) {
     console.error(`Failed to tail:`, error);
   }
