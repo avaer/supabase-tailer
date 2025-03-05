@@ -127,28 +127,49 @@ const main = async () => {
   const unifiedStream = new PassThrough();
   
   // Set up each file for tailing
-  for (const file of files) {
-    try {
-      let tailStream;
-      if (file === '-') {
-        tailStream = process.stdin;
-      } else {
-        // ensure the file exists, touch it if it doesn't
-        try {
-          await fs.promises.exists(file);
-        } catch (err) {
-          await fs.promises.writeFile(file, '');
-        }
-        tailStream = createReadStream(file);
+  const filePromises = files.map(async (file) => {
+    let tailStream;
+    if (file === '-') {
+      tailStream = process.stdin;
+    } else {
+      // ensure the file exists, touch it if it doesn't
+      try {
+        await fs.promises.lstat(file);
+      } catch (err) {
+        await fs.promises.writeFile(file, '');
       }
-      
-      tailStream.pipe(unifiedStream, {
-        end: false,
+      // create the read stream
+      tailStream = createReadStream(file);
+      // wait for initial eof
+      await new Promise((resolve) => {
+        const oneof = () => {
+          resolve(null);
+          cleanup();
+        };
+        tailStream.on('eof', oneof);
+        const onerror = (err) => {
+          reject(err);
+          cleanup();
+        };
+        tailStream.on('error', onerror);
+
+        const cleanup = () => {
+          tailStream.off('eof', oneof);
+          tailStream.off('error', onerror);
+        };
+
+        tailStream.resume();
       });
-      
-    } catch (error) {
-      console.error(`Failed to tail ${file}:`, error);
     }
+    
+    tailStream.pipe(unifiedStream, {
+      end: false,
+    });
+  });
+  try {
+    await Promise.all(filePromises);
+  } catch (error) {
+    console.error(`Failed to tail:`, error);
   }
 
   // Create a Supabase client to execute the query
