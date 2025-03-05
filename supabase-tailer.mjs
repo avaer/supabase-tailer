@@ -218,6 +218,7 @@ const main = async () => {
 
       watcher.on('add', (p) => {
         (async () => {
+          console.log('watching file', p);
           const tailStreamPromise = tailStreamManager.addTailStream(p, {
             parser,
           });
