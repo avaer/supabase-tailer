@@ -274,14 +274,14 @@ const main = async () => {
       if (line) {
         (async () => {
           const o = {
-          agent_id: agentId,
-          content: line,
-        };
-        console.log(o);
-        const result = await supabase.from(logsTableName)
-          .insert(o);
-        const { data, error } = result;
-        if (error) {
+            agent_id: agentId,
+            content: line,
+          };
+          console.log(o);
+          const result = await supabase.from(logsTableName)
+            .insert(o);
+          const { data, error } = result;
+          if (error) {
             console.warn('log insert error', error);
           }
         })();
