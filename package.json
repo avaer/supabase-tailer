@@ -3,7 +3,7 @@
   "version": "0.0.6",
   "main": "supabase-tailer.mjs",
   "bin": {
-    "supabase-tailer": "./supabase-tailer.mjs"
+    "supabase-tailer": "supabase-tailer.mjs"
   },
   "repository": {
     "type": "git",
