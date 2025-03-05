@@ -104,7 +104,9 @@ class TailStreamManager {
     this.tailStreams = new Map();
   }
 
-  async addTailStream(p) {
+  async addTailStream(p, {
+    parser,
+  }) {
     // ensure the file exists, touch it if it doesn't
     try {
       await fs.promises.lstat(p);
@@ -139,7 +141,14 @@ class TailStreamManager {
       tailStream.resume();
     });
 
-    return tailStream;
+    // return the parsed stream
+    const parsedStream = new PassThrough();
+    tailStream.pipe(split2())
+      .on('data', (line) => {
+        const parsedLine = parser(line);
+        parsedStream.write(parsedLine);
+      });
+    return parsedStream;
   }
 
   async removeTailStream(p) {
@@ -162,6 +171,20 @@ class TailStreamManager {
     }
   }
 }
+
+const dockerJsonLogParser = (line) => {
+  try {
+    const json = JSON.parse(line);
+    const { log } = json;
+    if (typeof log === 'string') {
+      return log;
+    } else {
+      throw new Error(`log is not a string: ${log}`);
+    }
+  } catch (err) {
+    console.warn(err.stack);
+  }
+};
 
 const main = async () => {
   // Load environment variables from .env file
@@ -202,6 +225,8 @@ const main = async () => {
       const format = match[1] || null;
       const path = match[2];
 
+      const parser = format === 'json' ? dockerJsonLogParser : (line) => line;
+
       // use chokidar to watch teh glob
       const watcher = chokidar.watch(path, {
         persistent: true,
@@ -210,7 +235,9 @@ const main = async () => {
       });
       watcher.on('add', () => {
         (async () => {
-          const tailStreamPromise = tailStreamManager.addTailStream(path);
+          const tailStreamPromise = tailStreamManager.addTailStream(path, {
+            parser,
+          });
           pathPromises.push(tailStreamPromise);
 
           const tailStream = await tailStreamPromise;
