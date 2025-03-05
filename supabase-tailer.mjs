@@ -10,8 +10,10 @@ import split2 from 'split2';
 import { createServerClient } from '@supabase/ssr'
 import jwt from '@tsndr/cloudflare-worker-jwt';
 import chokidar from 'chokidar';
+import { QueueManager } from 'queue-manager-async';
 
 const logsTableName = 'eliza_logs';
+const numParallelRequests = 10;
 
 const getCredentialsFromToken = (token) => {
   if (!token) {
@@ -191,6 +193,9 @@ const main = async () => {
   
   // Set up each file for tailing
   const tailStreamManager = new TailStreamManager();
+  const queueManager = new QueueManager({ // for rate limiting
+    parallelism: numParallelRequests,
+  });
   const pathPromises = [];
   for (const pathSpec of paths) {
     let tailStream;
@@ -272,7 +277,7 @@ const main = async () => {
   unifiedStream.pipe(split2())
     .on('data', (line) => {
       if (line) {
-        (async () => {
+        queueManager.waitForTurn(async () => {
           const o = {
             agent_id: agentId,
             content: line,
@@ -284,7 +289,7 @@ const main = async () => {
           if (error) {
             console.warn('log insert error', error);
           }
-        })();
+        });
       }
     });
 };
