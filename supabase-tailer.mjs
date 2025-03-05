@@ -205,6 +205,7 @@ const main = async () => {
       const parser = format === 'json' ? dockerJsonLogParser : (line) => line;
 
       // use chokidar to watch teh glob
+      console.log('watching path', p);
       const watcher = chokidar.watch(p, {
         persistent: true,
         followSymlinks: true,
