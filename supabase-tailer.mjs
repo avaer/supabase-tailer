@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import { program } from 'commander';
@@ -100,9 +101,9 @@ export const createClient = async ({
 };
 
 class TailStreamManager {
-  constructor() {
-    this.tailStreams = new Map();
-  }
+  // constructor() {
+  //   this.tailStreams = new Map();
+  // }
 
   async addTailStream(p, {
     parser,
@@ -118,7 +119,7 @@ class TailStreamManager {
     const tailStream = createReadStream(p);
 
     // latch the tail stream
-    this.tailStreams.set(p, tailStream);
+    // this.tailStreams.set(p, tailStream);
 
     // wait for initial eof
     await new Promise((resolve, reject) => {
@@ -145,36 +146,42 @@ class TailStreamManager {
     const parsedStream = new PassThrough();
     tailStream.pipe(split2())
       .on('data', (line) => {
-        const parsedLine = parser(line);
-        parsedStream.write(parsedLine);
+        if (line) {
+          console.log('tailStream data 1', { line });
+          const parsedLine = parser(line);
+          console.log('tailStream data 2', { parsedLine });
+          parsedStream.write(parsedLine + '\n');
+        }
       });
     return parsedStream;
   }
 
-  async removeTailStream(p) {
-    const tailStream = this.tailStreams.get(p);
-    if (tailStream) {
-      this.tailStreams.delete(p);
+  // async removeTailStream(p) {
+  //   // const tailStream = this.tailStreams.get(p);
+  //   // if (tailStream) {
+  //     // this.tailStreams.delete(p);
 
-      await new Promise((resolve) => {
-        const onclose = () => {
-          resolve(null);
-          cleanup();
-        };
-        tailStream.on('close', onclose);
-        const cleanup = () => {
-          tailStream.removeListener('close', onclose);
-        };
-      });
-    } else {
-      console.warn('tail stream not found', p);
-    }
-  }
+  //     await new Promise((resolve) => {
+  //       const onclose = () => {
+  //         resolve(null);
+  //         cleanup();
+  //       };
+  //       tailStream.on('close', onclose);
+  //       const cleanup = () => {
+  //         tailStream.removeListener('close', onclose);
+  //       };
+  //     });
+  //   // } else {
+  //   //   console.warn('tail stream not found', p);
+  //   // }
+  // }
 }
 
 const dockerJsonLogParser = (line) => {
   try {
+    console.log('dockerJsonLogParser 1', { line });
     const json = JSON.parse(line);
+    console.log('dockerJsonLogParser 2', { json });
     const { log } = json;
     if (typeof log === 'string') {
       return log;
@@ -216,43 +223,57 @@ const main = async () => {
   // Set up each file for tailing
   const tailStreamManager = new TailStreamManager();
   const pathPromises = [];
-  for (const p of paths) {
+  for (const pathSpec of paths) {
     let tailStream;
-    if (p === '-') {
+    if (pathSpec === '-') {
       tailStream = process.stdin;
     } else {
-      const match = p.match(/^(?:([^:]+):)?([\s\S]*)$/);
+      const match = pathSpec.match(/^(?:([^:]+):)?([\s\S]*)$/);
       const format = match[1] || null;
-      const path = match[2];
+      let p = match[2];
+      p = path.resolve(p);
 
       const parser = format === 'json' ? dockerJsonLogParser : (line) => line;
 
       // use chokidar to watch teh glob
-      const watcher = chokidar.watch(path, {
+      console.log('watch path', p);
+      const watcher = chokidar.watch(p, {
         persistent: true,
         followSymlinks: true,
         awaitWriteFinish: true,
       });
-      watcher.on('add', () => {
+
+      // // Add debug logging to help diagnose the issue
+      // watcher.on('all', (event, path) => {
+      //   console.log(`Watcher event: ${event} for ${path}`);
+      // });
+
+      watcher.on('add', (p) => {
+        console.log('watch file', p);
         (async () => {
-          const tailStreamPromise = tailStreamManager.addTailStream(path, {
+          const tailStreamPromise = tailStreamManager.addTailStream(p, {
             parser,
           });
           pathPromises.push(tailStreamPromise);
 
           const tailStream = await tailStreamPromise;
+          tailStream.on('data', (data) => {
+            console.log('tailStream data event', { data });
+          });
           tailStream.pipe(unifiedStream, {
             end: false,
           });
         })();
       });
-      watcher.on('unlink', () => {
-        (async () => {
-          await tailStreamManager.removeTailStream(path);
-        })();
-      });
+      // watcher.on('unlink', () => {
+      //   console.log('unwatch file', pathSpec);
+      //   (async () => {
+      //     await tailStreamManager.removeTailStream(p);
+      //   })();
+      // });
       const watcherPromise = new Promise((resolve) => {
         const onready = () => {
+          console.log('watcher ready', pathSpec);
           resolve();
           cleanup();
         };
@@ -290,19 +311,23 @@ const main = async () => {
   // The rest of your code for tailing files
   unifiedStream.pipe(split2())
     .on('data', (line) => {
-      (async () => {
-        const o = {
+      console.log('unifiedStream data', { line });
+      if (line) {
+        (async () => {
+          const o = {
           agent_id: agentId,
           content: line,
         };
-        // console.log('inserting log line', o);
+        console.log('inserting log line', o);
         const result = await supabase.from(logsTableName)
           .insert(o);
         const { data, error } = result;
+        console.log('add log line', JSON.stringify(o));
         if (error) {
-          console.warn('log insert error', error);
-        }
-      })();
+            console.warn('log insert error', error);
+          }
+        })();
+      }
     });
 };
 
