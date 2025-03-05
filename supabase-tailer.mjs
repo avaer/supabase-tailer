@@ -140,9 +140,7 @@ class TailStreamManager {
     tailStream.pipe(split2())
       .on('data', (line) => {
         if (line) {
-          console.log('tailStream data 1', { line });
           const parsedLine = parser(line);
-          console.log('tailStream data 2', { parsedLine });
           parsedStream.write(parsedLine + '\n');
         }
       });
