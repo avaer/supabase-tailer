@@ -113,6 +113,7 @@ class TailStreamManager {
     
     // create the read stream
     const tailStream = createReadStream(p);
+    tailStream.resume();
 
     // wait for initial eof
     await new Promise((resolve, reject) => {
@@ -131,8 +132,6 @@ class TailStreamManager {
         tailStream.off('eof', oneof);
         tailStream.off('error', onerror);
       };
-
-      tailStream.resume();
     });
 
     // return the parsed stream
