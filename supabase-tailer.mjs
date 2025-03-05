@@ -138,6 +138,7 @@ class TailStreamManager {
     const parsedStream = new PassThrough();
     tailStream.pipe(split2())
       .on('data', (line) => {
+        console.log(`${p}: ${line}`);
         if (line) {
           const parsedLine = parser(line);
           parsedStream.write(parsedLine + '\n');
@@ -225,6 +226,7 @@ const main = async () => {
           pathPromises.push(tailStreamPromise);
 
           const tailStream = await tailStreamPromise;
+          console.log('tailing file', p);
           tailStream.pipe(unifiedStream, {
             end: false,
           });
@@ -275,7 +277,7 @@ const main = async () => {
           agent_id: agentId,
           content: line,
         };
-        // console.log('inserting log line', o);
+        console.log(o);
         const result = await supabase.from(logsTableName)
           .insert(o);
         const { data, error } = result;
