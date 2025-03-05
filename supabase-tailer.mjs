@@ -132,14 +132,18 @@ const main = async () => {
     if (file === '-') {
       tailStream = process.stdin;
     } else {
+      const match = file.match(/^(?:([^:]+):)?([\s\S]*)$/);
+      const format = match[1] || null;
+      const path = match[2];
+
       // ensure the file exists, touch it if it doesn't
       try {
-        await fs.promises.lstat(file);
+        await fs.promises.lstat(path);
       } catch (err) {
-        await fs.promises.writeFile(file, '');
+        await fs.promises.writeFile(path, '');
       }
       // create the read stream
-      tailStream = createReadStream(file);
+      tailStream = createReadStream(path);
       // wait for initial eof
       await new Promise((resolve) => {
         const oneof = () => {
