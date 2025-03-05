@@ -12,7 +12,7 @@ import jwt from '@tsndr/cloudflare-worker-jwt';
 import chokidar from 'chokidar';
 
 const logsTableName = 'eliza_logs';
-const logPrefix = `supabase-tailer: `;
+const logPrefix = `[supabase-tailer] `;
 
 const getCredentialsFromToken = (token) => {
   if (!token) {
