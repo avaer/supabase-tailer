@@ -129,8 +129,8 @@ class TailStreamManager {
       tailStream.on('error', onerror);
 
       const cleanup = () => {
-        tailStream.off('eof', oneof);
-        tailStream.off('error', onerror);
+        tailStream.removeListener('eof', oneof);
+        tailStream.removeListener('error', onerror);
       };
     });
 
