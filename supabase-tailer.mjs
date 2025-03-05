@@ -12,7 +12,6 @@ import jwt from '@tsndr/cloudflare-worker-jwt';
 import chokidar from 'chokidar';
 
 const logsTableName = 'eliza_logs';
-const logPrefix = `[supabase-tailer] `;
 
 const getCredentialsFromToken = (token) => {
   if (!token) {
@@ -139,9 +138,7 @@ class TailStreamManager {
     const parsedStream = new PassThrough();
     tailStream.pipe(split2())
       .on('data', (line) => {
-        if (!line.startsWith(logPrefix)) {
-          console.log(`${logPrefix}${p}: ${line}`);
-        }
+        console.log(`${p}: ${line}`);
         if (line) {
           const parsedLine = parser(line);
           parsedStream.write(parsedLine + '\n');
@@ -161,7 +158,7 @@ const dockerJsonLogParser = (line) => {
       throw new Error(`log is not a string: ${log}`);
     }
   } catch (err) {
-    console.warn(`${logPrefix}error parsing json: ${err.stack}`);
+    console.warn(err.stack);
   }
 };
 
@@ -179,7 +176,7 @@ const main = async () => {
 
   const paths = program.args;
   if (paths.length === 0) {
-    console.error(`${logPrefix}Error: No paths specified`);
+    console.error("Error: No paths specified");
     process.exit(1);
   }
 
@@ -208,7 +205,7 @@ const main = async () => {
       const parser = format === 'json' ? dockerJsonLogParser : (line) => line;
 
       // use chokidar to watch teh glob
-      console.log(`${logPrefix}watching path`, p);
+      console.log('watching path', p);
       const watcher = chokidar.watch(p, {
         persistent: true,
         followSymlinks: true,
@@ -217,19 +214,19 @@ const main = async () => {
 
       // // Add debug logging to help diagnose the issue
       // watcher.on('all', (event, path) => {
-      //   console.log(`${logPrefix}Watcher event: ${event} for ${path}`);
+      //   console.log(`Watcher event: ${event} for ${path}`);
       // });
 
       watcher.on('add', (p) => {
         (async () => {
-          console.log(`${logPrefix}watching file`, p);
+          console.log('watching file', p);
           const tailStreamPromise = tailStreamManager.addTailStream(p, {
             parser,
           });
           pathPromises.push(tailStreamPromise);
 
           const tailStream = await tailStreamPromise;
-          console.log(`${logPrefix}tailing file`, p);
+          console.log('tailing file', p);
           tailStream.pipe(unifiedStream, {
             end: false,
           });
@@ -252,7 +249,7 @@ const main = async () => {
   try {
     await Promise.all(pathPromises);
   } catch (error) {
-    console.error(`${logPrefix}Failed to tail:`, error);
+    console.error(`Failed to tail:`, error);
   }
 
   // Create a Supabase client to execute the query
@@ -280,15 +277,13 @@ const main = async () => {
           agent_id: agentId,
           content: line,
         };
-        if (!line.startsWith(logPrefix)) {
-          console.log(`${logPrefix}inserting log line`, o);
-        }
+        console.log(o);
         const result = await supabase.from(logsTableName)
           .insert(o);
         const { data, error } = result;
         if (error) {
-          console.warn(`${logPrefix}log insert error`, error);
-        }
+            console.warn('log insert error', error);
+          }
         })();
       }
     });
