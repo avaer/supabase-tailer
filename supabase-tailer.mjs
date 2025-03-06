@@ -13,7 +13,6 @@ import chokidar from 'chokidar';
 import { QueueManager } from 'queue-manager-async';
 
 const logsTableName = 'eliza_logs';
-const numParallelRequests = 10;
 
 const getCredentialsFromToken = (token) => {
   if (!token) {
@@ -226,9 +225,7 @@ const main = async () => {
   
   // Set up each file for tailing
   const tailStreamManager = new TailStreamManager();
-  const queueManager = new QueueManager({ // for rate limiting
-    parallelism: numParallelRequests,
-  });
+  const queueManager = new QueueManager();
   const pathPromises = [];
   for (const pathSpec of paths) {
     let tailStream;
@@ -315,18 +312,27 @@ const main = async () => {
   const makeProcessLogLine = (stream) => (line) => {
     if (line) {
       queueManager.waitForTurn(async () => {
-        const o = {
-          agent_id: agentId,
-          content: line,
-          stream,
-        };
-        console.log(o);
-        const result = await supabase.from(logsTableName)
-          .insert(o);
-        const { data, error } = result;
-        if (error) {
-          console.warn('log insert error', error);
+        const numRetries = 10;
+        const retryDelayMs = 1000;
+        for (let i = 0; i < numRetries; i++) {
+          const o = {
+            agent_id: agentId,
+            content: line,
+            stream,
+          };
+          console.log(o);
+          const result = await supabase.from(logsTableName)
+            .insert(o);
+          const { data, error } = result;
+          if (!error) {
+            return;
+          } else {
+            console.warn('log insert error', error);
+            await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+            continue;
+          }
         }
+        throw new Error(`failed to insert log after ${numRetries} retries`);
       });
     }
   };
