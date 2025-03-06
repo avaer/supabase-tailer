@@ -150,6 +150,9 @@ class TailStreamManager {
   }
 }
 
+const defaultParser = (line) => {
+  return line;
+};
 const dockerJsonLogParser = (line) => {
   try {
     const json = JSON.parse(line);
@@ -207,7 +210,7 @@ const main = async () => {
       let p = match[2];
       p = path.resolve(p);
 
-      const parser = format === 'json' ? dockerJsonLogParser : (line) => line;
+      const parser = format === 'json' ? dockerJsonLogParser : defaultParser;
 
       // use chokidar to watch teh glob
       console.log('watching path', p);
