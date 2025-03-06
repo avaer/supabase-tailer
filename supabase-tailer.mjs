@@ -137,30 +137,59 @@ class TailStreamManager {
     });
 
     // return the parsed stream
-    const parsedStream = new PassThrough();
+    const stdoutStream = new PassThrough();
+    const stderrStream = new PassThrough();
     tailStream.pipe(split2())
       .on('data', (line) => {
         console.log(`${p}: ${line}`);
         if (line) {
-          const parsedLine = parser(line);
-          parsedStream.write(parsedLine + '\n');
+          const {
+            stdout,
+            stderr,
+          } = parser(line);
+          if (stdout) {
+            stdoutStream.write(stdout + '\n');
+          }
+          if (stderr) {
+            stderrStream.write(stderr + '\n');
+          }
         }
       });
-    return parsedStream;
+    return {
+      stdoutStream,
+      stderrStream,
+    };
   }
 }
 
 const defaultParser = (line) => {
-  return line;
+  return {
+    stdout: line,
+    stderr: null,
+  };
 };
 const dockerJsonLogParser = (line) => {
+  const _invalidLogLineError = () => new Error(`log line is not valid: ${line}`);
+
   try {
     const json = JSON.parse(line);
-    const { log } = json;
-    if (typeof log === 'string') {
-      return log;
+    const { log, stream } = json;
+    if (typeof log === 'string' && ['stdout', 'stderr'].includes(stream)) {
+      if (stream === 'stdout') {
+        return {
+          stdout: log,
+          stderr: null,
+        };
+      } else if (stream === 'stderr') {
+        return {
+          stdout: null,
+          stderr: log,
+        };
+      } else {
+        throw _invalidLogLineError();
+      }
     } else {
-      throw new Error(`log is not a string: ${log}`);
+      throw _invalidLogLineError();
     }
   } catch (err) {
     console.warn(err.stack);
@@ -192,7 +221,8 @@ const main = async () => {
   const { userId, agentId } = getCredentialsFromToken(jwt);
 
   // Create a unified stream
-  const unifiedStream = new PassThrough();
+  const globalStdoutStream = new PassThrough();
+  const globalStderrStream = new PassThrough();
   
   // Set up each file for tailing
   const tailStreamManager = new TailStreamManager();
@@ -232,9 +262,15 @@ const main = async () => {
             parser,
           });
 
-          const tailStream = await tailStreamPromise;
+          const {
+            stdoutStream,
+            stderrStream,
+          } = await tailStreamPromise;
           console.log('tailing file', p);
-          tailStream.pipe(unifiedStream, {
+          stdoutStream.pipe(globalStdoutStream, {
+            end: false,
+          });
+          stderrStream.pipe(globalStderrStream, {
             end: false,
           });
         })();
@@ -276,24 +312,28 @@ const main = async () => {
   // }
 
   // The rest of your code for tailing files
-  unifiedStream.pipe(split2())
-    .on('data', (line) => {
-      if (line) {
-        queueManager.waitForTurn(async () => {
-          const o = {
-            agent_id: agentId,
-            content: line,
-          };
-          console.log(o);
-          const result = await supabase.from(logsTableName)
-            .insert(o);
-          const { data, error } = result;
-          if (error) {
-            console.warn('log insert error', error);
-          }
-        });
-      }
-    });
+  const makeProcessLogLine = (stream) => (line) => {
+    if (line) {
+      queueManager.waitForTurn(async () => {
+        const o = {
+          agent_id: agentId,
+          content: line,
+          stream,
+        };
+        console.log(o);
+        const result = await supabase.from(logsTableName)
+          .insert(o);
+        const { data, error } = result;
+        if (error) {
+          console.warn('log insert error', error);
+        }
+      });
+    }
+  };
+  globalStdoutStream.pipe(split2())
+    .on('data', makeProcessLogLine('stdout'));
+  globalStderrStream.pipe(split2())
+    .on('data', makeProcessLogLine('stderr'));
 };
 
 // Run only when this file is executed directly (not when imported as a module)
