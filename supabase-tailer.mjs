@@ -316,6 +316,7 @@ const main = async () => {
         const retryDelayMs = 1000;
         for (let i = 0; i < numRetries; i++) {
           const o = {
+            user_id: userId,
             agent_id: agentId,
             content: line,
             stream,
