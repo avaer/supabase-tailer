@@ -23,6 +23,9 @@ importers:
       commander:
         specifier: ^13.1.0
         version: 13.1.0
+      debouncer-async:
+        specifier: ^0.0.2
+        version: 0.0.2
       dotenv:
         specifier: ^16.4.7
         version: 16.4.7
@@ -103,6 +106,9 @@ packages:
   cookie@0.7.2:
     resolution: {integrity: sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w==}
     engines: {node: '>= 0.6'}
+
+  debouncer-async@0.0.2:
+    resolution: {integrity: sha512-Zp7oupYctKFAbCWrY5SnRha8h9PlF8mzibZ/viaDlcgTZxnkBLdgXRPHidBJ87blrr5buioqD5raJBNvkKHodQ==}
 
   dotenv@16.4.7:
     resolution: {integrity: sha512-47qPchRCykZC03FhkYAhrvwU4xDBFIj1QPqaarj6mdM/hgUzfPHcpkHJOn3mJAufFeeAxAzeGsr5X0M4k6fLZQ==}
@@ -277,6 +283,8 @@ snapshots:
   commander@13.1.0: {}
 
   cookie@0.7.2: {}
+
+  debouncer-async@0.0.2: {}
 
   dotenv@16.4.7: {}
 
