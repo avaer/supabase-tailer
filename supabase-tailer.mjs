@@ -10,7 +10,7 @@ import split2 from 'split2';
 import { createServerClient } from '@supabase/ssr'
 import jwt from '@tsndr/cloudflare-worker-jwt';
 import chokidar from 'chokidar';
-import { QueueManager } from 'queue-manager-async';
+import { Debouncer } from 'debouncer-async';
 
 const logsTableName = 'eliza_logs';
 
@@ -225,7 +225,7 @@ const main = async () => {
   
   // Set up each file for tailing
   const tailStreamManager = new TailStreamManager();
-  const queueManager = new QueueManager();
+  const debouncer = new Debouncer();
   const pathPromises = [];
   for (const pathSpec of paths) {
     let tailStream;
@@ -309,31 +309,38 @@ const main = async () => {
   // }
 
   // The rest of your code for tailing files
+  const lineQueue = [];
   const makeProcessLogLine = (stream) => (line) => {
     if (line) {
-      queueManager.waitForTurn(async () => {
-        const numRetries = 10;
-        const retryDelayMs = 1000;
-        for (let i = 0; i < numRetries; i++) {
-          const o = {
-            user_id: userId,
-            agent_id: agentId,
-            content: line,
-            stream,
-          };
-          console.log(o);
-          const result = await supabase.from(logsTableName)
-            .insert(o);
-          const { data, error } = result;
-          if (!error) {
-            return;
-          } else {
-            console.warn('log insert error', error);
-            await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
-            continue;
+      const entry = {
+        user_id: userId,
+        agent_id: agentId,
+        content: line,
+        stream,
+      };
+      lineQueue.push(entry);
+
+      debouncer.waitForTurn(async () => {
+        const entries = lineQueue.slice();
+        lineQueue.length = 0;
+
+        if (entries.length > 0) {
+          const numRetries = 10;
+          const retryDelayMs = 1000;
+          for (let i = 0; i < numRetries; i++) {
+            const result = await supabase.from(logsTableName)
+              .insert(entries);
+            const { error } = result;
+            if (!error) {
+              return;
+            } else {
+              console.warn('log lines insert error', error);
+              await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+              continue;
+            }
           }
+          throw new Error(`failed to insert log after ${numRetries} retries`);
         }
-        throw new Error(`failed to insert log after ${numRetries} retries`);
       });
     }
   };
