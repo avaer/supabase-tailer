@@ -29,9 +29,6 @@ importers:
       dotenv:
         specifier: ^16.4.7
         version: 16.4.7
-      queue-manager-async:
-        specifier: ^0.0.2
-        version: 0.0.2
       split2:
         specifier: ^4.2.0
         version: 4.2.0
@@ -150,9 +147,6 @@ packages:
   picomatch@2.3.1:
     resolution: {integrity: sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA==}
     engines: {node: '>=8.6'}
-
-  queue-manager-async@0.0.2:
-    resolution: {integrity: sha512-OCz3MvqAcmfVa6oyRp7KIwd/8Ame2B/hEdm/kWwks4GmUO1qyao4dEdHYnZYCJWHiuUXzMBSN0Nhz+Wi/wNymw==}
 
   readdirp@3.6.0:
     resolution: {integrity: sha512-hOS089on8RduqdbhvQ5Z37A0ESjsqz6qnRcffsMU3495FuTdqSm+7bhJ29JvIOsBDEEnan5DPu9t3To9VRlMzA==}
@@ -314,8 +308,6 @@ snapshots:
   normalize-path@3.0.0: {}
 
   picomatch@2.3.1: {}
-
-  queue-manager-async@0.0.2: {}
 
   readdirp@3.6.0:
     dependencies:
