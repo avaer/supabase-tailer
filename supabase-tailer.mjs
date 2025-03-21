@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+// node supabase-tailer.mjs --jwt [jwt] *.txt
+
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
@@ -102,56 +104,33 @@ export const createClient = async ({
 };
 
 class TailStreamManager {
-  async addTailStream(p, {
-    parser,
-  }) {
-    // ensure the file exists, touch it if it doesn't
-    try {
-      await fs.promises.lstat(p);
-    } catch (err) {
-      await fs.promises.writeFile(p, '');
-    }
-    
+  async addTailStream(p) {
+    // ensure the file exists, by opening it in append mode
+    // fs.createWriteStream(p, { flags: 'a' });
+    // try {
+    //   await fs.promises.lstat(p);
+    // } catch (err) {
+    //   await fs.promises.writeFile(p, '');
+    // }
+
+    // get the initial size of the file
+    const initialStats = await fs.promises.lstat(p);
+    const initialSize = initialStats.size;
+
     // create the read stream
-    const tailStream = createReadStream(p);
-    tailStream.resume();
-
-    // wait for initial eof
-    await new Promise((resolve, reject) => {
-      const oneof = () => {
-        resolve(null);
-        cleanup();
-      };
-      tailStream.on('eof', oneof);
-      const onerror = (err) => {
-        reject(err);
-        cleanup();
-      };
-      tailStream.on('error', onerror);
-
-      const cleanup = () => {
-        tailStream.removeListener('eof', oneof);
-        tailStream.removeListener('error', onerror);
-      };
+    const tailStream = createReadStream(p, {
+      start: initialSize,
     });
+    // tailStream.resume();
 
     // return the parsed stream
     const stdoutStream = new PassThrough();
     const stderrStream = new PassThrough();
     tailStream.pipe(split2())
       .on('data', (line) => {
-        console.log(`${p}: ${line}`);
+        // console.log(`${p}: ${line}`);
         if (line) {
-          const {
-            stdout,
-            stderr,
-          } = parser(line);
-          if (stdout) {
-            stdoutStream.write(stdout + '\n');
-          }
-          if (stderr) {
-            stderrStream.write(stderr + '\n');
-          }
+          stdoutStream.write(line + '\n');
         }
       });
     return {
@@ -160,40 +139,6 @@ class TailStreamManager {
     };
   }
 }
-
-const defaultParser = (line) => {
-  return {
-    stdout: line,
-    stderr: null,
-  };
-};
-const dockerJsonLogParser = (line) => {
-  const _invalidLogLineError = () => new Error(`log line is not valid: ${line}`);
-
-  try {
-    const json = JSON.parse(line);
-    const { log, stream } = json;
-    if (typeof log === 'string' && ['stdout', 'stderr'].includes(stream)) {
-      if (stream === 'stdout') {
-        return {
-          stdout: log,
-          stderr: null,
-        };
-      } else if (stream === 'stderr') {
-        return {
-          stdout: null,
-          stderr: log,
-        };
-      } else {
-        throw _invalidLogLineError();
-      }
-    } else {
-      throw _invalidLogLineError();
-    }
-  } catch (err) {
-    console.warn(err.stack);
-  }
-};
 
 const main = async () => {
   // Load environment variables from .env file
@@ -237,9 +182,7 @@ const main = async () => {
       let p = match[2];
       p = path.resolve(p);
 
-      const parser = format === 'json' ? dockerJsonLogParser : defaultParser;
-
-      // use chokidar to watch teh glob
+      // use chokidar to watch the glob
       console.log('watching path', p);
       const watcher = chokidar.watch(p, {
         persistent: true,
@@ -255,9 +198,7 @@ const main = async () => {
       watcher.on('add', (p) => {
         (async () => {
           console.log('watching file', p);
-          const tailStreamPromise = tailStreamManager.addTailStream(p, {
-            parser,
-          });
+          const tailStreamPromise = tailStreamManager.addTailStream(p);
 
           const {
             stdoutStream,
@@ -323,6 +264,8 @@ const main = async () => {
       debouncer.waitForTurn(async () => {
         const entries = lineQueue.slice();
         lineQueue.length = 0;
+
+        console.log('entries', entries);
 
         if (entries.length > 0) {
           const numRetries = 10;
