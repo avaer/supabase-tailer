@@ -14,8 +14,6 @@ import jwt from '@tsndr/cloudflare-worker-jwt';
 import chokidar from 'chokidar';
 import { Debouncer } from 'debouncer-async';
 
-const logsTableName = 'eliza_logs';
-
 const getCredentialsFromToken = (token) => {
   if (!token) {
     throw new Error("cannot get client for blank token");
@@ -149,6 +147,7 @@ const main = async () => {
     .name("supabase-tailer")
     .description("Tail multiple files and stream their contents to Supabase")
     .option("--jwt <token>", "JWT token for authentication")
+    .option("--tableName <tableName>", "Table name to write to")
     .argument("[paths...]", "Paths to tail")
     .parse(process.argv);
 
@@ -161,6 +160,10 @@ const main = async () => {
   const jwt = program.opts().jwt;
   if (!jwt) {
     throw new Error("Error: No JWT token specified");
+  }
+  const tableName = program.opts().tableName;
+  if (!tableName) {
+    throw new Error("Error: No table name specified");
   }
   const { userId, agentId } = getCredentialsFromToken(jwt);
 
@@ -178,7 +181,7 @@ const main = async () => {
       tailStream = process.stdin;
     } else {
       const match = pathSpec.match(/^(?:([^:]+):)?([\s\S]*)$/);
-      const format = match[1] || null;
+      // const format = match[1] || null;
       let p = match[2];
       p = path.resolve(p);
 
@@ -271,7 +274,7 @@ const main = async () => {
           const numRetries = 10;
           const retryDelayMs = 1000;
           for (let i = 0; i < numRetries; i++) {
-            const result = await supabase.from(logsTableName)
+            const result = await supabase.from(tableName)
               .insert(entries);
             const { error } = result;
             if (!error) {
