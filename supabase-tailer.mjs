@@ -21,7 +21,9 @@ const getCredentialsFromToken = (token) => {
 
   const out = jwt.decode(token);
   const userId = out?.payload?.userId ?? out?.payload?.sub ?? null;
-  const agentId = out?.payload?.agentId ?? null;
+  // const agentId = out?.payload?.agentId ?? null;
+  // const mcpId = out?.payload?.mcpId ?? null;
+  const payload = out?.payload ?? null;
 
   if (!userId) {
     throw new Error("could not get user id from token");
@@ -29,7 +31,9 @@ const getCredentialsFromToken = (token) => {
 
   return {
     userId,
-    agentId,
+    // agentId,
+    // mcpId,
+    payload,
   };
 };
 
@@ -148,6 +152,8 @@ const main = async () => {
     .description("Tail multiple files and stream their contents to Supabase")
     .option("--jwt <token>", "JWT token for authentication")
     .option("--tableName <tableName>", "Table name to write to")
+    .option("--databaseIdKey <databaseIdKey>", "Database ID key to write to")
+    .option("--authIdKey <authIdKey>", "Auth ID key to get the id from")
     .argument("[paths...]", "Paths to tail")
     .parse(process.argv);
 
@@ -165,7 +171,19 @@ const main = async () => {
   if (!tableName) {
     throw new Error("Error: No table name specified");
   }
-  const { userId, agentId } = getCredentialsFromToken(jwt);
+  const databaseIdKey = program.opts().databaseIdKey;
+  if (!databaseIdKey) {
+    throw new Error("Error: No database id key specified");
+  }
+  const authIdKey = program.opts().authIdKey;
+  if (!authIdKey) {
+    throw new Error("Error: No auth id key specified");
+  }
+  const { userId, payload } = getCredentialsFromToken(jwt);
+  const authId = payload[authIdKey];
+  if (!authId) {
+    throw new Error("Error: No auth id found in payload");
+  }
 
   // Create a unified stream
   const globalStdoutStream = new PassThrough();
@@ -258,7 +276,7 @@ const main = async () => {
     if (line) {
       const entry = {
         user_id: userId,
-        agent_id: agentId,
+        [databaseIdKey]: authId,
         content: line,
         stream,
       };
